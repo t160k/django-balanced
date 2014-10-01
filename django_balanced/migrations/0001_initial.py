@@ -4,6 +4,21 @@ from south.db import db
 from south.v2 import SchemaMigration
 from django.db import models
 
+# For django custom user model see:
+# http://kevindias.com/writing/django-custom-user-models-south-and-reusable-apps/
+
+# Safe User import for Django < 1.5
+try:
+    from django.contrib.auth import get_user_model
+except ImportError:
+    from django.contrib.auth.models import User
+else:
+    User = get_user_model()
+
+# With the default User model these will be 'auth.User' and 'auth.user'
+# so instead of using orm['auth.User'] we can use orm[user_orm_label]
+user_orm_label = '%s.%s' % (User._meta.app_label, User._meta.object_name)
+user_model_label = '%s.%s' % (User._meta.app_label, User._meta.module_name)
 
 class Migration(SchemaMigration):
 
@@ -13,7 +28,7 @@ class Migration(SchemaMigration):
             ('created_at', self.gf('django.db.models.fields.DateTimeField')()),
             ('id', self.gf('django.db.models.fields.CharField')(max_length=255)),
             ('uri', self.gf('django.db.models.fields.CharField')(max_length=255, primary_key=True)),
-            ('user', self.gf('django.db.models.fields.related.ForeignKey')(related_name=u'bank_accounts', null=True, to=orm['roomchoice.CustomUser'])),
+            ('user', self.gf('django.db.models.fields.related.ForeignKey')(related_name=u'bank_accounts', null=True, to=orm[user_orm_label])),
             ('account_number', self.gf('django.db.models.fields.CharField')(max_length=255)),
             ('name', self.gf('django.db.models.fields.CharField')(max_length=255)),
             ('routing_number', self.gf('django.db.models.fields.CharField')(max_length=255)),
@@ -27,7 +42,7 @@ class Migration(SchemaMigration):
             ('created_at', self.gf('django.db.models.fields.DateTimeField')()),
             ('id', self.gf('django.db.models.fields.CharField')(max_length=255)),
             ('uri', self.gf('django.db.models.fields.CharField')(max_length=255, primary_key=True)),
-            ('user', self.gf('django.db.models.fields.related.ForeignKey')(related_name=u'cards', to=orm['roomchoice.CustomUser'])),
+            ('user', self.gf('django.db.models.fields.related.ForeignKey')(related_name=u'cards', to=orm['accounts.T160KUser'])),
             ('name', self.gf('django.db.models.fields.CharField')(max_length=255)),
             ('expiration_month', self.gf('django.db.models.fields.IntegerField')()),
             ('expiration_year', self.gf('django.db.models.fields.IntegerField')()),
@@ -41,10 +56,11 @@ class Migration(SchemaMigration):
             ('created_at', self.gf('django.db.models.fields.DateTimeField')()),
             ('id', self.gf('django.db.models.fields.CharField')(max_length=255)),
             ('uri', self.gf('django.db.models.fields.CharField')(max_length=255, primary_key=True)),
-            ('user', self.gf('django.db.models.fields.related.ForeignKey')(related_name=u'credits', null=True, to=orm['roomchoice.CustomUser'])),
+            ('user', self.gf('django.db.models.fields.related.ForeignKey')(related_name=u'credits', null=True, to=orm['accounts.T160KUser'])),
             ('bank_account', self.gf('django.db.models.fields.related.ForeignKey')(related_name=u'credits', to=orm['django_balanced.BankAccount'])),
             ('amount', self.gf('django.db.models.fields.DecimalField')(max_digits=10, decimal_places=2)),
             ('description', self.gf('django.db.models.fields.CharField')(max_length=255, null=True)),
+            ('statement_descriptor', self.gf('django.db.models.fields.CharField')(max_length=12, null=True)),
             ('status', self.gf('django.db.models.fields.CharField')(max_length=255)),
         ))
         db.send_create_signal(u'django_balanced', ['Credit'])
@@ -54,10 +70,12 @@ class Migration(SchemaMigration):
             ('created_at', self.gf('django.db.models.fields.DateTimeField')()),
             ('id', self.gf('django.db.models.fields.CharField')(max_length=255)),
             ('uri', self.gf('django.db.models.fields.CharField')(max_length=255, primary_key=True)),
-            ('user', self.gf('django.db.models.fields.related.ForeignKey')(related_name=u'debits', to=orm['roomchoice.CustomUser'])),
+            ('user', self.gf('django.db.models.fields.related.ForeignKey')(related_name=u'debits', to=orm['accounts.T160KUser'])),
             ('amount', self.gf('django.db.models.fields.DecimalField')(max_digits=10, decimal_places=2)),
             ('description', self.gf('django.db.models.fields.CharField')(max_length=255)),
-            ('card', self.gf('django.db.models.fields.related.ForeignKey')(related_name=u'debits', to=orm['django_balanced.Card'])),
+            ('statement_descriptor', self.gf('django.db.models.fields.CharField')(max_length=12, null=True)),
+            ('card', self.gf('django.db.models.fields.related.ForeignKey')(blank=True, related_name=u'debits', null=True, to=orm['django_balanced.Card'])),
+            ('bank_account', self.gf('django.db.models.fields.related.ForeignKey')(blank=True, related_name=u'debits', null=True, to=orm['django_balanced.BankAccount'])),
         ))
         db.send_create_signal(u'django_balanced', ['Debit'])
 
@@ -66,7 +84,7 @@ class Migration(SchemaMigration):
             ('created_at', self.gf('django.db.models.fields.DateTimeField')()),
             ('id', self.gf('django.db.models.fields.CharField')(max_length=255)),
             ('uri', self.gf('django.db.models.fields.CharField')(max_length=255, primary_key=True)),
-            ('user', self.gf('django.db.models.fields.related.OneToOneField')(related_name=u'balanced_account', unique=True, to=orm['roomchoice.CustomUser'])),
+            ('user', self.gf('django.db.models.fields.related.OneToOneField')(related_name=u'balanced_account', unique=True, to=orm['accounts.T160KUser'])),
         ))
         db.send_create_signal(u'django_balanced', ['Account'])
 
@@ -89,32 +107,26 @@ class Migration(SchemaMigration):
 
 
     models = {
-        u'auth.group': {
-            'Meta': {'object_name': 'Group'},
-            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
-            'name': ('django.db.models.fields.CharField', [], {'unique': 'True', 'max_length': '80'}),
-            'permissions': ('django.db.models.fields.related.ManyToManyField', [], {'to': u"orm['auth.Permission']", 'symmetrical': 'False', 'blank': 'True'})
-        },
-        u'auth.permission': {
-            'Meta': {'ordering': "(u'content_type__app_label', u'content_type__model', u'codename')", 'unique_together': "((u'content_type', u'codename'),)", 'object_name': 'Permission'},
-            'codename': ('django.db.models.fields.CharField', [], {'max_length': '100'}),
-            'content_type': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['contenttypes.ContentType']"}),
-            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
-            'name': ('django.db.models.fields.CharField', [], {'max_length': '50'})
-        },
-        u'contenttypes.contenttype': {
-            'Meta': {'ordering': "('name',)", 'unique_together': "(('app_label', 'model'),)", 'object_name': 'ContentType', 'db_table': "'django_content_type'"},
-            'app_label': ('django.db.models.fields.CharField', [], {'max_length': '100'}),
-            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
-            'model': ('django.db.models.fields.CharField', [], {'max_length': '100'}),
-            'name': ('django.db.models.fields.CharField', [], {'max_length': '100'})
+        # We've accounted for changes to:
+        # the app name, table name, pk attribute name, pk column name.
+        # The only assumption left is that the pk is an AutoField (see below)
+        user_model_label: {
+            'Meta': {
+                'object_name': User.__name__,
+                'db_table': "'%s'" % User._meta.db_table
+            },
+            User._meta.pk.attname: (
+                'django.db.models.fields.AutoField', [],
+                {'primary_key': 'True',
+                'db_column': "'%s'" % User._meta.pk.column}
+            ),
         },
         u'django_balanced.account': {
             'Meta': {'object_name': 'Account', 'db_table': "u'balanced_accounts'"},
             'created_at': ('django.db.models.fields.DateTimeField', [], {}),
             'id': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
             'uri': ('django.db.models.fields.CharField', [], {'max_length': '255', 'primary_key': 'True'}),
-            'user': ('django.db.models.fields.related.OneToOneField', [], {'related_name': "u'balanced_account'", 'unique': 'True', 'to': u"orm['roomchoice.CustomUser']"})
+            'user': ('django.db.models.fields.related.OneToOneField', [], {'related_name': "u'balanced_account'", 'unique': 'True', 'to': u"orm['accounts.T160KUser']"})
         },
         u'django_balanced.bankaccount': {
             'Meta': {'object_name': 'BankAccount', 'db_table': "u'balanced_bank_accounts'"},
@@ -126,7 +138,7 @@ class Migration(SchemaMigration):
             'routing_number': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
             'type': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
             'uri': ('django.db.models.fields.CharField', [], {'max_length': '255', 'primary_key': 'True'}),
-            'user': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "u'bank_accounts'", 'null': 'True', 'to': u"orm['roomchoice.CustomUser']"})
+            'user': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "u'bank_accounts'", 'null': 'True', 'to': u"orm['accounts.T160KUser']"})
         },
         u'django_balanced.card': {
             'Meta': {'object_name': 'Card', 'db_table': "u'balanced_cards'"},
@@ -138,7 +150,7 @@ class Migration(SchemaMigration):
             'last_four': ('django.db.models.fields.CharField', [], {'max_length': '4'}),
             'name': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
             'uri': ('django.db.models.fields.CharField', [], {'max_length': '255', 'primary_key': 'True'}),
-            'user': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "u'cards'", 'to': u"orm['roomchoice.CustomUser']"})
+            'user': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "u'cards'", 'to': u"orm['accounts.T160KUser']"})
         },
         u'django_balanced.credit': {
             'Meta': {'object_name': 'Credit', 'db_table': "u'balanced_credits'"},
@@ -147,39 +159,22 @@ class Migration(SchemaMigration):
             'created_at': ('django.db.models.fields.DateTimeField', [], {}),
             'description': ('django.db.models.fields.CharField', [], {'max_length': '255', 'null': 'True'}),
             'id': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
+            'statement_descriptor': ('django.db.models.fields.CharField', [], {'max_length': '12', 'null': 'True'}),
             'status': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
             'uri': ('django.db.models.fields.CharField', [], {'max_length': '255', 'primary_key': 'True'}),
-            'user': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "u'credits'", 'null': 'True', 'to': u"orm['roomchoice.CustomUser']"})
+            'user': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "u'credits'", 'null': 'True', 'to': u"orm['accounts.T160KUser']"})
         },
         u'django_balanced.debit': {
             'Meta': {'object_name': 'Debit', 'db_table': "u'balanced_debits'"},
             'amount': ('django.db.models.fields.DecimalField', [], {'max_digits': '10', 'decimal_places': '2'}),
-            'card': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "u'debits'", 'to': u"orm['django_balanced.Card']"}),
+            'bank_account': ('django.db.models.fields.related.ForeignKey', [], {'blank': 'True', 'related_name': "u'debits'", 'null': 'True', 'to': u"orm['django_balanced.BankAccount']"}),
+            'card': ('django.db.models.fields.related.ForeignKey', [], {'blank': 'True', 'related_name': "u'debits'", 'null': 'True', 'to': u"orm['django_balanced.Card']"}),
             'created_at': ('django.db.models.fields.DateTimeField', [], {}),
             'description': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
             'id': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
+            'statement_descriptor': ('django.db.models.fields.CharField', [], {'max_length': '12', 'null': 'True'}),
             'uri': ('django.db.models.fields.CharField', [], {'max_length': '255', 'primary_key': 'True'}),
-            'user': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "u'debits'", 'to': u"orm['roomchoice.CustomUser']"})
-        },
-        u'roomchoice.customuser': {
-            'Meta': {'object_name': 'CustomUser'},
-            'date_joined': ('django.db.models.fields.DateTimeField', [], {'default': 'datetime.datetime.now'}),
-            'email': ('django.db.models.fields.EmailField', [], {'unique': 'True', 'max_length': '254'}),
-            'first_name': ('django.db.models.fields.CharField', [], {'max_length': '30', 'blank': 'True'}),
-            'gender': ('django.db.models.fields.CharField', [], {'default': "u'F'", 'max_length': '1'}),
-            'groups': ('django.db.models.fields.related.ManyToManyField', [], {'symmetrical': 'False', 'related_name': "u'user_set'", 'blank': 'True', 'to': u"orm['auth.Group']"}),
-            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
-            'invite_id': ('uuidfield.fields.UUIDField', [], {'default': 'None', 'max_length': '32', 'null': 'True', 'blank': 'True'}),
-            'is_active': ('django.db.models.fields.BooleanField', [], {'default': 'True'}),
-            'is_staff': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
-            'is_superuser': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
-            'is_validated': ('django.db.models.fields.BooleanField', [], {'default': 'True'}),
-            'last_login': ('django.db.models.fields.DateTimeField', [], {'default': 'datetime.datetime.now'}),
-            'last_name': ('django.db.models.fields.CharField', [], {'max_length': '30', 'blank': 'True'}),
-            'password': ('django.db.models.fields.CharField', [], {'max_length': '128'}),
-            'role': ('django.db.models.fields.CharField', [], {'default': "u'student'", 'max_length': '7'}),
-            'unique_id': ('uuidfield.fields.UUIDField', [], {'db_index': 'True', 'unique': 'True', 'max_length': '32', 'blank': 'True'}),
-            'user_permissions': ('django.db.models.fields.related.ManyToManyField', [], {'symmetrical': 'False', 'related_name': "u'user_set'", 'blank': 'True', 'to': u"orm['auth.Permission']"})
+            'user': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "u'debits'", 'to': u"orm['accounts.T160KUser']"})
         }
     }
 

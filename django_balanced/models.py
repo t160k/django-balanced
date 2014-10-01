@@ -21,6 +21,16 @@ if BALANCED.get('API_KEY'):
 
 AUTH_USER_MODEL = getattr(settings, 'AUTH_USER_MODEL', 'auth.User')
 
+# Safe User import for Django < 1.5
+try:
+    from django.contrib.auth import get_user_model
+except ImportError:
+    from django.contrib.auth.models import User
+    USERNAME_FIELD = 'username'
+else:
+    User = get_user_model()
+    USERNAME_FIELD = User.USERNAME_FIELD
+
 
 class BalancedException(Exception):
     pass
@@ -315,7 +325,7 @@ class Account(BalancedResource):
     def save(self, **kwargs):
         if not self.uri:
             ac = balanced.Account(
-                name=self.user.username,
+                name=getattr(self.user, USERNAME_FIELD),
             )
             try:
                 ac.save()
