@@ -44,9 +44,11 @@ How to send ACH payments in 10 minutes
 
 5. Run `BALANCED_API_KEY=YOUR_API_KEY django-admin.py syncdb`
 
-6. Run `BALANCED_API_KEY=YOUR_API_KEY python manage.py runserver`
+5. Run `BALANCED_API_KEY=YOUR_API_KEY django-admin.py syncbalanced`
 
-7. Visit `http://127.0.0.1:8000/admin` and pay some people!
+7. Run `BALANCED_API_KEY=YOUR_API_KEY python manage.py runserver`
+
+8. Visit `http://127.0.0.1:8000/admin` and pay some people!
 
 Testing
 -------
